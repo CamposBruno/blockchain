@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const Persist  = require('./lib/persist')
+const Transactions = require('./lib/transact')
 
 class Blockchain {
     constructor(){
@@ -7,31 +8,52 @@ class Blockchain {
         this.last_nonce
         this.last_block_hash = '0x0'        
         this.secret = 'T3MNDBTBrasil21@'
+        this.zeros = 5
+        this.blocksize = 1
     }
 
     async init(){
         this.last_block_hash = await new Persist().getLastHash()
     }
 
+    async getTransactions(){
+        const transactions = await Transactions.getTransactionsPool(this.blocksize)
+        if(transactions.length)
+            return transactions.reduce((p, c) => p + c + '')
+        else
+            return ''
+        //return new Block(this.last_nonce, transactions, this.last_block_hash)         
+    }
+
     async mine(){
         const start_time = new Date().getTime()
-        const nonce = Math.floor(Math.random() * 10000000000)
-        let i = 0
-        while(i != nonce){
-            i++
-        }        
-        const end_time = new Date().getTime()
+        const transactions = await this.getTransactions()
+        let nonce = 0
+        let nonce_hash
+        let loop = true
+        while(loop) {
+            nonce_hash = this.hashit(transactions + nonce)
+            //console.log(hash)
+            if(this.guessTheHash(nonce_hash)) {     
+                this.last_nonce = nonce         
+                loop = false
+            }
+            else nonce++
+        }
         
-        this.last_nonce = i
+        const end_time = new Date().getTime()
         this.blocktime = end_time - start_time
+        
+        const block = new Block(nonce_hash, transactions, this.last_block_hash)         
+        const sblock_hash = this.hashit(nonce_hash + transactions + this.last_block_hash)
+        
+        this.last_block_hash = sblock_hash
 
-        const block = new Block(this.last_nonce, 'MSG', this.last_block_hash) 
-        this.last_block_hash = this.hashit(JSON.stringify(block))
         const p = new Persist()
-        p.appendHistory(this.last_block_hash + "\n")
+        p.appendHistory(this.last_block_hash + "\n")        
 
         console.log("===================")
-        console.log("BLOCK HASH : " + this.hashit(JSON.stringify(block)))
+        console.log("BLOCK HASH : " + this.last_block_hash)
         console.log("PREVIOUS BLOCK HASH : " + block.previous_hash)
         console.log("BLOCK NONCE : " + block.nonce)
         console.log("BLOCK MSG : " + block.msg)
@@ -39,6 +61,16 @@ class Blockchain {
         console.log("===================")        
 
         this.mine()
+    }
+
+    guessTheHash(hash){
+        const zerofill = '0'.padStart((this.zeros), '0')
+
+        const slice = hash.slice(0, this.zeros)
+
+        //console.log(slice , '==', zerofill)
+
+        return hash.slice(0, this.zeros) === zerofill ? true : false
     }
 
     hashit(it) {
