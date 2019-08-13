@@ -9,7 +9,7 @@ class Blockchain {
         this.last_block_hash = '0x0'        
         this.secret = 'T3MNDBTBrasil21@'
         this.zeros = 5
-        this.blocksize = 1
+        this.blocksize = 5
     }
 
     async init(){

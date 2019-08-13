@@ -13,5 +13,10 @@
     "blockchain"
   ],
   "author": "Bruno Campos",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "body-parse": "^0.1.0",
+    "elliptic": "^6.5.0",
+    "express": "^4.17.1"
+  }
 }
