@@ -13,23 +13,23 @@ const ec = new EC('secp256k1')
 const {Blockchain, Transaction, Block} = require('../lib/blockchain')
 
 
-const BytehubCoin = new Blockchain()
-BytehubCoin.init()
+const _blockchain = new Blockchain()
+_blockchain.init()
 
 
 app.get('/chain', async (req, res) => {
-    //const chain = await new Persist().getChain() 
-    res.status(200).json(BytehubCoin)
+    await _blockchain.init()
+    res.status(200).json(_blockchain)
 })
 
 app.get('/balanceOf/:address', async (req, res) => {
-    const balance = await BytehubCoin.getBalanceOfAddress(req.params.address)
+    const balance = await _blockchain.getBalanceOfAddress(req.params.address)
     res.status(200).json({balance})
 })
 
 app.get('/isValid', async (req, res) => {
     try {
-        const valid = await BytehubCoin.isChainValid()    
+        const valid = await _blockchain.isChainValid()    
         res.status(200).json({valid})
     } catch (error) {
         res.status(500).json({
@@ -49,6 +49,8 @@ app.get('/sync', async (req, res) => {
 
     try {
         const longestNodeUrl = await longestChainNode()
+
+        console.log('sync with ' + longestNodeUrl)
         const blocksSync = await sync(longestNodeUrl)    
 
         return res.status(200).json({
@@ -66,8 +68,8 @@ app.get('/sync', async (req, res) => {
 
 app.get('/broadcast-chain/:lastBlockHash', async (req, res) => {
     console.log('hey! send me all blocks after ' + req.params.lastBlockHash)
-    const chain = BytehubCoin.chain
-    const lastBlockHash = BytehubCoin.getLatestBlock().hash
+    const chain = _blockchain.chain
+    const lastBlockHash = _blockchain.getLatestBlock().hash
     const limit = 100
 
     const start = (chain.map(block => block.hash).indexOf(req.params.lastBlockHash) + 1)
@@ -77,6 +79,29 @@ app.get('/broadcast-chain/:lastBlockHash', async (req, res) => {
         latestHash : lastBlockHash,
         blocks : latestBlocks
     })
+})
+
+app.post('/incoming-block', async (req, res) => {
+    const block = req.body.block
+    try {
+
+        if(!block || !block.timestamp || !block.transactions || !block.previousHash || !block.nonce || !block.hash )
+            throw new Exception('Invalid block')
+
+        const new_block = new Block(block.timestamp, block.transactions, block.previousHash, block.nonce)                
+
+        _blockchain.incomingBlock(new_block, block.hash)
+        
+        return res.status(200).json({
+            message : 'Block accepted'
+        })
+        
+    } catch (error) {
+        return res.status(400).json({
+            message : error.message
+        })
+    }    
+    
 })
 
 app.post('/transaction', async (req, res) => {
@@ -93,7 +118,7 @@ app.post('/transaction', async (req, res) => {
         if(!amount)
             throw new Error('Amount must be informed')  
             
-        const balance = await BytehubCoin.getBalanceOfAddress(fromAddress)
+        const balance = await _blockchain.getBalanceOfAddress(fromAddress)
 
         if(balance < amount)
             throw new Error('from address has not enough balance')
@@ -103,7 +128,7 @@ app.post('/transaction', async (req, res) => {
         const new_transaction = new Transaction(fromAddress, toAddress, amount)
         new_transaction.signTransaction(signingkey)
 
-        BytehubCoin.addTransaction(new_transaction)
+        _blockchain.addTransaction(new_transaction)
         
         res.status(200).json(new_transaction)
         
@@ -120,13 +145,13 @@ app.post('/transaction', async (req, res) => {
 app.post('/register-node', (req, res) => {
     const nodeUrl = req.body.nodeUrl
     try {
-        if(BytehubCoin.networkNodes.indexOf(nodeUrl) >= 0)
+        if(_blockchain.networkNodes.indexOf(nodeUrl) >= 0)
             throw new Error('Node already registered')
     
-        if(BytehubCoin.nodeUrl === nodeUrl)
+        if(_blockchain.nodeUrl === nodeUrl)
             throw new Error('Self registered is not permited')
 
-        BytehubCoin.networkNodes.push(nodeUrl)    
+        _blockchain.networkNodes.push(nodeUrl)    
 
         return res.status(200).json({
             message : 'A node registers successfully!'
@@ -147,13 +172,13 @@ app.post('/register-bulk-nodes', (req, res) => {
     try {
 
         networkNodes.forEach(nodeUrl => {
-            if(BytehubCoin.networkNodes.indexOf(nodeUrl) >= 0)
+            if(_blockchain.networkNodes.indexOf(nodeUrl) >= 0)
                 throw new Error('Node already registered')
     
-            if(BytehubCoin.nodeUrl === nodeUrl)
+            if(_blockchain.nodeUrl === nodeUrl)
                 throw new Error('Self register is not permited')
 
-            BytehubCoin.networkNodes.push(nodeUrl);
+            _blockchain.networkNodes.push(nodeUrl);
         })
 
         return res.status(200).json({
@@ -172,16 +197,16 @@ app.post('/register-and-broadcast-node', async (req, res) => {
     const nodeUrl = req.body.nodeUrl;
     try {
 
-        if(BytehubCoin.networkNodes.indexOf(nodeUrl) >= 0)
+        if(_blockchain.networkNodes.indexOf(nodeUrl) >= 0)
             throw new Error('Node already registered')
 
-        if(BytehubCoin.nodeUrl === nodeUrl)
+        if(_blockchain.nodeUrl === nodeUrl)
             throw new Error('Self registered is not permited')
         
 
         const registerNodes = [];
 
-        BytehubCoin.networkNodes.forEach(networkNode => {
+        _blockchain.networkNodes.forEach(networkNode => {
             const requestOptions = {
                 uri: networkNode + '/register-node',
                 method: 'POST',
@@ -197,11 +222,11 @@ app.post('/register-and-broadcast-node', async (req, res) => {
         const bulkRegisterOptions = {
             uri: nodeUrl + '/register-bulk-nodes',
             method: 'POST',
-            body: { networkNodes: [...BytehubCoin.networkNodes, BytehubCoin.nodeUrl] },
+            body: { networkNodes: [..._blockchain.networkNodes, _blockchain.nodeUrl] },
             json: true  
         }
 
-        BytehubCoin.networkNodes.push(nodeUrl);
+        _blockchain.networkNodes.push(nodeUrl);
 
         await reqPromise(bulkRegisterOptions);
 
@@ -221,7 +246,7 @@ app.post('/register-and-broadcast-node', async (req, res) => {
 
 async function sync(nodeUrl){
     const requestOptions = {
-        uri: nodeUrl + '/broadcast-chain/' + BytehubCoin.getLatestBlock().hash,
+        uri: nodeUrl + '/broadcast-chain/' + _blockchain.getLatestBlock().hash,
         method: 'GET',
         json: true
     }
@@ -231,20 +256,19 @@ async function sync(nodeUrl){
     // {latestHash : 'HASH', blocks : [{}, {}, {}]}
 
     response.blocks.forEach((block) => {
-        const new_block = new Block(block.timestamp, block.transactions, block.previousHash)
-        new_block.nonce = block.nonce
+        const new_block = new Block(block.timestamp, block.transactions, block.previousHash, block.nonce)        
 
         if(block.hash !== new_block.calculateHash())
-            throw new Exception(`block ${new_block.hash} is invalid`)
+            throw new Error(`block ${block.hash} is invalid`)
         
         if(!new_block.hasValidTransaction())
-            throw new Exception(`block ${new_block.hash} has is invalid transactions`)
+            throw new Error(`block ${block.hash} has is invalid transactions`)
         
-        BytehubCoin.appendBlock(block)
+        _blockchain.appendBlock(new_block)
         
     })
 
-    if(BytehubCoin.getLatestBlock().hash !== response.latestHash)
+    if(_blockchain.getLatestBlock().hash !== response.latestHash)
         sync(nodeUrl)
     
         
@@ -254,7 +278,8 @@ async function sync(nodeUrl){
 
 async function longestChainNode(){
     const requests = [];
-    BytehubCoin.networkNodes.forEach(nodeUrl => {
+    console.log(_blockchain.networkNodes)
+    _blockchain.networkNodes.forEach(nodeUrl => {
         const requestOptions = {
             uri: nodeUrl + '/chain',
             method: 'GET',
@@ -266,12 +291,12 @@ async function longestChainNode(){
     })
 
     const blockchains = await Promise.all(requests)
-    const currentChainLength = BytehubCoin.chain.length;
+    const currentChainLength = _blockchain.chain.length;
     let maxChainLength = currentChainLength;
     let nodeWithlongestChain = null;
 
     blockchains.forEach(blockchain => {
-        if (blockchain.chain.length > maxChainLength) {
+        if (blockchain.chain.length >= maxChainLength) {
             maxChainLength = blockchain.chain.length;
             nodeWithlongestChain = blockchain.nodeUrl;            
         }
