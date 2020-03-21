@@ -22,7 +22,7 @@
   "dependencies": {
     "body-parse": "^0.1.0",
     "config": "^3.2.2",
-    "elliptic": "^6.5.0",
+    "elliptic": "^6.5.2",
     "express": "^4.17.1",
     "nodemon": "^1.19.1",
     "request": "^2.88.0",
