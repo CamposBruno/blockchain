@@ -9,7 +9,9 @@
     "node2": "nodemon --watch api -e js api/api.js 5002 http://localhost:5002",
     "node3": "nodemon --watch api -e js api/api.js 5003 http://localhost:5003",
     "node4": "nodemon --watch api -e js api/api.js 5004 http://localhost:5004",
-    "node5": "nodemon --watch api -e js api/api.js 5005 http://localhost:5005"
+    "node5": "nodemon --watch api -e js api/api.js 5005 http://localhost:5005",
+    "snyk-protect": "snyk protect",
+    "prepare": "npm run snyk-protect"
   },
   "keywords": [
     "Bytehub",
@@ -26,6 +28,8 @@
     "express": "^4.17.1",
     "nodemon": "^1.19.1",
     "request": "^2.88.0",
-    "request-promise": "^4.2.4"
-  }
+    "request-promise": "^4.2.4",
+    "snyk": "^1.316.1"
+  },
+  "snyk": true
 }
